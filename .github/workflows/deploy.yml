@@ -1,6 +1,6 @@
 name: Build e Deploy no Render
 
-# Igual ao workflow do professor: a cada push na main, gera a imagem,
+# a cada push na main, gera a imagem,
 # publica no Docker Hub e avisa o Render para subir a versão nova.
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 env:
-  IMAGE: docker.io/SEU_USUARIO_DOCKERHUB/gateway-vaq
+  IMAGE: docker.io/brun0la/gateway-vaq
 
 jobs:
   build-deploy:
