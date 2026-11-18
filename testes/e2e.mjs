@@ -4,6 +4,14 @@
 // mensageria (RabbitMQ), concorrência e relatório. Não precisa instalar nada: só Node 20+.
 //
 //   node testes/e2e.mjs
+//
+// Antes, suba: MongoDB (replica set), gateway (8080), login (8081), campanha (8082),
+// doação (8083) e relatório (8084). Os serviços precisam da variável RABBITMQ_PASSWORD.
+//
+// Variáveis opcionais: GATEWAY_URL, CAMPANHA_URL, DOACAO_URL, RELATORIO_URL, LOGIN_URL,
+// ADMIN_EMAIL, ADMIN_SENHA, ESPERA_EVENTOS_MS (quanto esperar uma mensagem do RabbitMQ chegar; padrão 15000),
+// TIMEOUT_MS (tempo máximo de cada requisição; padrão 15000. No Render gratuito use 60000).
+
 const GATEWAY = process.env.GATEWAY_URL ?? 'http://localhost:8080';
 const LOGIN = process.env.LOGIN_URL ?? 'http://localhost:8081';
 const CAMPANHA = process.env.CAMPANHA_URL ?? 'http://localhost:8082';
@@ -12,6 +20,7 @@ const RELATORIO = process.env.RELATORIO_URL ?? 'http://localhost:8084';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'admin@muuv.com';
 const ADMIN_SENHA = process.env.ADMIN_SENHA ?? 'admin123';
 const ESPERA_EVENTOS_MS = Number(process.env.ESPERA_EVENTOS_MS ?? 15000);
+const TIMEOUT_MS = Number(process.env.TIMEOUT_MS ?? 15000);
 
 // ---------------------------------------------------------------- utilidades
 
@@ -37,7 +46,7 @@ async function req(method, url, { body, cookie, headers = {} } = {}) {
         method,
         headers: h,
         body: body === undefined ? undefined : (typeof body === 'string' ? body : JSON.stringify(body)),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     const texto = await res.text();
     let json = null;
@@ -95,7 +104,7 @@ async function main() {
     let todosNoAr = true;
     for (const [nome, url] of [['Gateway', GATEWAY], ['Login', LOGIN], ['Campanha', CAMPANHA], ['Doação', DOACAO], ['Relatório', RELATORIO]]) {
         try {
-            const r = await fetch(url, { signal: AbortSignal.timeout(3000) });
+            const r = await fetch(url, { signal: AbortSignal.timeout(Math.min(TIMEOUT_MS, 60000)) });
             check('S0', `${nome} respondendo`, true, `${url} → HTTP ${r.status}`);
         } catch (e) {
             todosNoAr = check('S0', `${nome} respondendo`, false, `${url} não respondeu (${e.cause?.code ?? e.name})`) && todosNoAr;
@@ -327,6 +336,13 @@ function fim() {
 }
 
 main().catch(e => {
+    if (e?.name === 'TimeoutError') {
+        console.error(`\nUma requisição passou de ${TIMEOUT_MS} ms e o teste parou.`);
+        console.error('Veja os logs do serviço no Render. Se ele só estiver lento, rode de novo com TIMEOUT_MS maior (ex.: 60000).');
+        fim();
+        process.exitCode = 1;
+        return;
+    }
     console.error('\nErro inesperado no teste:', e);
     process.exitCode = 1;
 });
